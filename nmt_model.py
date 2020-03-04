@@ -165,6 +165,8 @@ class NMT(nn.Module):
 
         dec_init_state = (init_decoder_hidden, init_decoder_cell)
 
+        enc_hiddens = enc_hiddens.permute([1, 0, 2])
+
         # END YOUR CODE
 
         return enc_hiddens, dec_init_state
