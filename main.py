@@ -89,7 +89,8 @@ def train(args):
 
     vocab = Vocab.load(args.vocab_file)
     model = NMT(embed_size=args.embed_size,
-                hidden_size=args.hidden_size,
+                encoder_hidden_size=args.encoder_hidden_size,
+                decoder_hidden_size=args.decoder_hidden_size,
                 dropout_rate=args.dropout,
                 vocab=vocab)
     model.train()
@@ -316,7 +317,8 @@ def main():
     # Training hyperparameters
     parser.add_argument("--batch_size", default=32, type=int)
     parser.add_argument("--embed_size", default=64, type=int)
-    parser.add_argument("--hidden_size", default=64, type=int)
+    parser.add_argument("--encoder_hidden_size", default=64, type=int)
+    parser.add_argument("--decoder_hidden_size", default=128, type=int)
     parser.add_argument("--clip_grad", default=5.0, type=float)
     parser.add_argument("--dropout", default=0.3, type=float)
     parser.add_argument("--max_epoch", default=50, type=int)

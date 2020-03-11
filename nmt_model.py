@@ -19,7 +19,7 @@ class NMT(nn.Module):
         - Unidirection LSTM Decoder
         - Global Attention Model (Luong, et al. 2015)
     """
-    def __init__(self, embed_size, hidden_size, vocab, dropout_rate=0.2):
+    def __init__(self, embed_size, encoder_hidden_size, decoder_hidden_size, vocab, dropout_rate=0.2):
         """ Init NMT Model.
 
         ********** IMPORTANT ***********
@@ -35,7 +35,8 @@ class NMT(nn.Module):
         """
         super(NMT, self).__init__()
         self.embed_size = embed_size
-        self.hidden_size = hidden_size
+        self.encoder_hidden_size = encoder_hidden_size
+        self.decoder_hidden_size = decoder_hidden_size
         self.dropout_rate = dropout_rate
         self.vocab = vocab
 
@@ -58,20 +59,20 @@ class NMT(nn.Module):
         self.target_embeddings = nn.Embedding(len(vocab.tgt), embed_size, padding_idx=tgt_pad_token_idx)
 
         # Bidirectional LSTM with bias
-        self.encoder = nn.LSTM(embed_size, hidden_size, bidirectional=True)
+        self.encoder = nn.LSTM(embed_size, encoder_hidden_size, bidirectional=True)
         # LSTM Cell with bia
-        self.decoder = nn.LSTMCell(embed_size + hidden_size, hidden_size)
+        self.decoder = nn.LSTMCell(embed_size + decoder_hidden_size, decoder_hidden_size)
 
         # Linear Layer with no bias), called W_{h} in the PDF.
-        self.h_projection = nn.Linear(hidden_size * 2, hidden_size, bias=False)
+        self.h_projection = nn.Linear(encoder_hidden_size * 2, decoder_hidden_size, bias=False)
         # Linear Layer with no bias), called W_{c} in the PDF.
-        self.c_projection = nn.Linear(hidden_size * 2, hidden_size, bias=False)
+        self.c_projection = nn.Linear(encoder_hidden_size * 2, decoder_hidden_size, bias=False)
         # Linear Layer with no bias), called W_{attProj} in the PDF.
-        self.att_projection = nn.Linear(hidden_size * 2, hidden_size, bias=False)
+        self.att_projection = nn.Linear(decoder_hidden_size * 2, encoder_hidden_size, bias=False)
         # Linear Layer with no bias), called W_{u} in the PDF.
-        self.combined_output_projection = nn.Linear(hidden_size * 2 + hidden_size, hidden_size, bias=False)
+        self.combined_output_projection = nn.Linear(encoder_hidden_size * 2 + encoder_hidden_size, encoder_hidden_size, bias=False)
         # Linear Layer with no bias), called W_{vocab} in the PDF.
-        self.target_vocab_projection = nn.Linear(hidden_size, len(vocab.tgt), bias=False)
+        self.target_vocab_projection = nn.Linear(encoder_hidden_size, len(vocab.tgt), bias=False)
         # Dropout Layer
         self.dropout = nn.Dropout(self.dropout_rate)
 
@@ -195,7 +196,7 @@ class NMT(nn.Module):
 
         # Initialize previous combined output vector o_{t-1} as zero
         batch_size = enc_hiddens.size(0)
-        o_prev = torch.zeros(batch_size, self.hidden_size, device=self.device)
+        o_prev = torch.zeros(batch_size, self.decoder_hidden_size, device=self.device)
 
         # Initialize a list we will use to collect the combined output o_t on each step
         combined_outputs = []
@@ -488,7 +489,8 @@ class NMT(nn.Module):
 
         params = {
             'args': dict(embed_size=self.embed_size,
-                         hidden_size=self.hidden_size,
+                         encoder_hidden_size=self.encoder_hidden_size,
+                         decoder_hidden_size=self.decoder_hidden_size,
                          dropout_rate=self.dropout_rate),
             'vocab': self.vocab,
             'state_dict': self.state_dict()
