@@ -6,9 +6,6 @@ Usage:
     python main.py --mode train --model_path <model_path>
     python main.py --mode eval_dev --model_path <model_path> --output_file <output_file>
     python main.py --mode eval_test --model_path <model_path> --output_file <output_file>
-
-
-
 Options:
    See python main.py --help
 """
@@ -89,11 +86,8 @@ def train(args):
 
     vocab = Vocab.load(args.vocab_file)
     model = NMT(embed_size=args.embed_size,
-                encoder_hidden_size=args.encoder_hidden_size,
-                decoder_hidden_size=args.decoder_hidden_size,
+                hidden_size=args.hidden_size,
                 dropout_rate=args.dropout,
-                attention_mode=args.attention_mode,
-                arch=args.arch,
                 vocab=vocab)
     model.train()
 
@@ -300,10 +294,6 @@ def main():
     parser.add_argument("--mode",
                         choices=["train", "eval_dev", "eval_test", "eval_train"], required=True)
     parser.add_argument("--model_path", required=True)
-    parser.add_argument("--attention_mode",
-                        choices=["mult", "add", "dot"], required=True)
-    parser.add_argument("--arch",
-                        choices=["LSTM", "GRU"], required=True)
 
     # Data locations, these shouldn't need to be changed from the defaults
     parser.add_argument("--train_src", default="data/train.fr", type=str,
@@ -323,8 +313,7 @@ def main():
     # Training hyperparameters
     parser.add_argument("--batch_size", default=32, type=int)
     parser.add_argument("--embed_size", default=64, type=int)
-    parser.add_argument("--encoder_hidden_size", default=64, type=int)
-    parser.add_argument("--decoder_hidden_size", default=128, type=int)
+    parser.add_argument("--hidden_size", default=64, type=int)
     parser.add_argument("--clip_grad", default=5.0, type=float)
     parser.add_argument("--dropout", default=0.3, type=float)
     parser.add_argument("--max_epoch", default=50, type=int)

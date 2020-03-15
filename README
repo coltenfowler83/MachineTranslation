@@ -1,0 +1,2 @@
+Encoder / Decoder hidden size are setting command line args
+Attention mode required, defaults to "mult" for multiplicative att, use "add" for additive

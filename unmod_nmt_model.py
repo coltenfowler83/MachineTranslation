@@ -19,7 +19,7 @@ class NMT(nn.Module):
         - Unidirection LSTM Decoder
         - Global Attention Model (Luong, et al. 2015)
     """
-    def __init__(self, embed_size, encoder_hidden_size, decoder_hidden_size, vocab, attention_mode, arch, dropout_rate=0.2):
+    def __init__(self, embed_size, hidden_size, vocab, dropout_rate=0.2):
         """ Init NMT Model.
 
         ********** IMPORTANT ***********
@@ -35,12 +35,9 @@ class NMT(nn.Module):
         """
         super(NMT, self).__init__()
         self.embed_size = embed_size
-        self.encoder_hidden_size = encoder_hidden_size
-        self.decoder_hidden_size = decoder_hidden_size
+        self.hidden_size = hidden_size
         self.dropout_rate = dropout_rate
         self.vocab = vocab
-        self.attention_mode = attention_mode
-        self.arch = arch
 
         # default values
         self.source_embeddings = None
@@ -50,9 +47,6 @@ class NMT(nn.Module):
         self.h_projection = None
         self.c_projection = None
         self.att_projection = None
-        self.vt = None
-        self.w1 = None
-        self.w2 = None
         self.combined_output_projection = None
         self.target_vocab_projection = None
         self.dropout = None
@@ -63,32 +57,21 @@ class NMT(nn.Module):
         tgt_pad_token_idx = vocab.tgt['<pad>']
         self.target_embeddings = nn.Embedding(len(vocab.tgt), embed_size, padding_idx=tgt_pad_token_idx)
 
-        if self.arch == "LSTM":
-            # Bidirectional LSTM with bias
-            self.encoder = nn.LSTM(embed_size, encoder_hidden_size, bidirectional=True)
-            # LSTM Cell with bia
-            self.decoder = nn.LSTMCell(embed_size + encoder_hidden_size, decoder_hidden_size)
-        elif self.arch == "GRU":
-            self.encoder = nn.GRU(embed_size, encoder_hidden_size, bidirectional=True)
-            self.decoder = nn.GRUCell(embed_size + encoder_hidden_size, decoder_hidden_size)
+        # Bidirectional LSTM with bias
+        self.encoder = nn.LSTM(embed_size, hidden_size, bidirectional=True)
+        # LSTM Cell with bia
+        self.decoder = nn.LSTMCell(embed_size + hidden_size, hidden_size)
 
         # Linear Layer with no bias), called W_{h} in the PDF.
-        self.h_projection = nn.Linear(encoder_hidden_size * 2, decoder_hidden_size, bias=False)
+        self.h_projection = nn.Linear(hidden_size * 2, hidden_size, bias=False)
         # Linear Layer with no bias), called W_{c} in the PDF.
-        self.c_projection = nn.Linear(encoder_hidden_size * 2, decoder_hidden_size, bias=False)
+        self.c_projection = nn.Linear(hidden_size * 2, hidden_size, bias=False)
         # Linear Layer with no bias), called W_{attProj} in the PDF.
-        if self.attention_mode != "dot":
-            self.att_projection = nn.Linear(encoder_hidden_size * 2, decoder_hidden_size, bias=False)
-        # Learned parameter for additive attention, called vt in PDF
-        self.vt = nn.Linear(decoder_hidden_size, 1, bias=False)
-        # Linear layer with no bias, called W_1 in the PDF
-        self.w1 = nn.Linear(encoder_hidden_size * 2, decoder_hidden_size, bias=False)
-        # Linear layer with no bias, called W_2 in the PDF
-        self.w2 = nn.Linear(encoder_hidden_size * 2, decoder_hidden_size, bias=False)
+        self.att_projection = nn.Linear(hidden_size * 2, hidden_size, bias=False)
         # Linear Layer with no bias), called W_{u} in the PDF.
-        self.combined_output_projection = nn.Linear(encoder_hidden_size * 2 + decoder_hidden_size, encoder_hidden_size, bias=False)
+        self.combined_output_projection = nn.Linear(hidden_size * 2 + hidden_size, hidden_size, bias=False)
         # Linear Layer with no bias), called W_{vocab} in the PDF.
-        self.target_vocab_projection = nn.Linear(encoder_hidden_size, len(vocab.tgt), bias=False)
+        self.target_vocab_projection = nn.Linear(hidden_size, len(vocab.tgt), bias=False)
         # Dropout Layer
         self.dropout = nn.Dropout(self.dropout_rate)
 
@@ -168,36 +151,21 @@ class NMT(nn.Module):
         #     Tensor Permute:
         #         https://pytorch.org/docs/stable/tensors.html#torch.Tensor.permute
 
-        if self.arch == "LSTM":
-            X = self.source_embeddings(source_padded)
+        X = self.source_embeddings(source_padded)
 
-            packed_X = pack_padded_sequence(X, source_lengths)
-            packed_enc_hiddens, (last_hidden, last_cell) = self.encoder(packed_X)
-            enc_hiddens, _ = pad_packed_sequence(packed_enc_hiddens)
+        packed_X = pack_padded_sequence(X, source_lengths)
+        packed_enc_hiddens, (last_hidden, last_cell) = self.encoder(packed_X)
+        enc_hiddens, _ = pad_packed_sequence(packed_enc_hiddens)
 
-            hidden_cat = torch.cat((last_hidden[1], last_hidden[0]), 1)
-            cell_cat = torch.cat((last_cell[1], last_cell[0]), 1)
+        hidden_cat = torch.cat((last_hidden[1], last_hidden[0]), 1)
+        cell_cat = torch.cat((last_cell[1], last_cell[0]), 1)
 
-            init_decoder_hidden = self.h_projection(hidden_cat)
-            init_decoder_cell = self.c_projection(cell_cat)
+        init_decoder_hidden = self.h_projection(hidden_cat)
+        init_decoder_cell = self.c_projection(cell_cat)
 
-            dec_init_state = (init_decoder_hidden, init_decoder_cell)
+        dec_init_state = (init_decoder_hidden, init_decoder_cell)
 
-            enc_hiddens = enc_hiddens.permute([1, 0, 2])
-
-        elif self.arch == "GRU":
-            X = self.source_embeddings(source_padded)
-
-            packed_X = pack_padded_sequence(X, source_lengths)
-            packed_enc_hiddens, hidden = self.encoder(packed_X)
-            enc_hiddens, _ = pad_packed_sequence(packed_enc_hiddens)
-
-            hidden_cat = torch.cat((hidden[1], hidden[0]), 1)
-            init_decoder_hidden = self.h_projection(hidden_cat)
-
-            dec_init_state = (init_decoder_hidden, torch.zeros(init_decoder_hidden.size()))
-
-            enc_hiddens = enc_hiddens.permute([1, 0, 2])
+        enc_hiddens = enc_hiddens.permute([1, 0, 2])
 
         # END YOUR CODE
 
@@ -227,7 +195,7 @@ class NMT(nn.Module):
 
         # Initialize previous combined output vector o_{t-1} as zero
         batch_size = enc_hiddens.size(0)
-        o_prev = torch.zeros(batch_size, self.encoder_hidden_size, device=self.device)
+        o_prev = torch.zeros(batch_size, self.hidden_size, device=self.device)
 
         # Initialize a list we will use to collect the combined output o_t on each step
         combined_outputs = []
@@ -261,13 +229,7 @@ class NMT(nn.Module):
         #     Tensor Stacking:
         #         https://pytorch.org/docs/stable/torch.html#torch.stack
 
-        if self.attention_mode == "mult":
-            enc_hiddens_proj = self.att_projection(enc_hiddens)
-        elif self.attention_mode == "add":
-            enc_hiddens_proj = self.w2(enc_hiddens)
-        elif self.attention_mode == "dot":
-            enc_hiddens_proj = enc_hiddens
-
+        enc_hiddens_proj = self.att_projection(enc_hiddens)
         Y = self.target_embeddings(target_padded)
 
         for Y_t in torch.split(Y, Y.size(0))[0]:
@@ -338,20 +300,9 @@ class NMT(nn.Module):
         #     Tensor Squeeze:
         #         https://pytorch.org/docs/stable/torch.html#torch.squeeze
 
-        if self.arch == "LSTM":
-            dec_state = self.decoder(Ybar_t, dec_state)
-            dec_hidden, dec_cell = dec_state
-        elif self.arch == "GRU":
-            dec_hidden = self.decoder(Ybar_t, dec_state[0])
-            dec_state = (dec_hidden, torch.zeros(dec_hidden.size()))
-        if self.attention_mode == "mult":
-            e_t = torch.bmm(enc_hiddens_proj, dec_hidden.unsqueeze(2)).squeeze(2)
-        elif self.attention_mode == "add":
-            dec_hidden_proj = self.w1(dec_hidden).unsqueeze(1)
-            tanh = torch.tanh(enc_hiddens_proj + dec_hidden_proj)
-            e_t = self.vt(tanh).squeeze(2)
-        elif self.attention_mode == "dot":
-            e_t = torch.bmm(enc_hiddens, dec_hidden.unsqueeze(2)).squeeze(2)
+        dec_state = self.decoder(Ybar_t, dec_state)
+        dec_hidden, dec_cell = dec_state
+        e_t = torch.bmm(enc_hiddens_proj, dec_hidden.unsqueeze(2)).squeeze(2)
 
         # END YOUR CODE
 
@@ -432,7 +383,7 @@ class NMT(nn.Module):
             src_encodings_att_linear = self.att_projection(src_encodings)
 
         h_tm1 = dec_init_vec
-        att_tm1 = torch.zeros(1, self.encoder_hidden_size, device=self.device)
+        att_tm1 = torch.zeros(1, self.hidden_size, device=self.device)
 
         hypotheses = [['<s>']]
         hyp_scores = torch.zeros(len(hypotheses), dtype=torch.float, device=self.device)
@@ -461,12 +412,8 @@ class NMT(nn.Module):
 
             x = torch.cat([y_t_embed, att_tm1], dim=-1)
 
-            #if self.arch == "LSTM":
             (h_t, cell_t), att_t, _ = self.step(x, h_tm1, exp_src_encodings,
                                                 exp_src_encodings_att_linear, enc_masks=None)
-            #elif self.arch == "GRU":
-                #h_t, att_t, _ = self.step(x, h_tm1, exp_src_encodings,
-            #                                    exp_src_encodings_att_linear, enc_masks=None)
 
             # log probabilities over target words
             log_p_t = F.log_softmax(self.target_vocab_projection(att_t), dim=-1)
@@ -541,11 +488,8 @@ class NMT(nn.Module):
 
         params = {
             'args': dict(embed_size=self.embed_size,
-                         encoder_hidden_size=self.encoder_hidden_size,
-                         decoder_hidden_size=self.decoder_hidden_size,
-                         dropout_rate=self.dropout_rate,
-                         attention_mode=self.attention_mode,
-                         arch=self.arch),
+                         hidden_size=self.hidden_size,
+                         dropout_rate=self.dropout_rate),
             'vocab': self.vocab,
             'state_dict': self.state_dict()
         }
