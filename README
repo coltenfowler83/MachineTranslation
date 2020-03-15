@@ -1,2 +1,16 @@
-Encoder / Decoder hidden size are setting command line args
-Attention mode required, defaults to "mult" for multiplicative att, use "add" for additive
+Encoder / Decoder hidden size are setable command line args, but not required.  If they are not set at cmd line, they
+will default to encoder_hidden_size=64, decoder_hidden_size=128
+
+Attention mode required command line arguments, defaults to "mult" for multiplicative att,
+use "add" for additive, use "dot" for dot product attention (e.g. "--attention_mode" "dot")
+
+Arch is added as an additional required command line argument.  This specifies whether to use an LSTM or GRU architecture.
+Set as an argument using "--arch" "LSTM" or "--arch" "GRU"
+
+Vocab generation unchanged.
+
+To run main in train mode, an example set of arguments is:
+"--mode" "train" "--model_path" "model.bin" "--attention_mode" "dot" "--arch" "LSTM"
+
+To run main in eval mode, example arguments:
+"--arch" "LSTM" "--mode" "eval_test" "--model_path" "model.bin" "--attention_mode" "dot" "--output_file" "test.out"
